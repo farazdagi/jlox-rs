@@ -27,14 +27,14 @@ impl Lox {
         let input = std::io::stdin();
         let mut stdout = std::io::stdout().lock();
         loop {
-            stdout.write_all(b"> ")?;
+            stdout.write_all(b">>> ")?;
             stdout.flush()?;
             let mut buffer = String::new();
             input.read_line(&mut buffer).unwrap();
-            if buffer.is_empty() {
+            if buffer.trim().is_empty() {
                 break;
             }
-            self.run(&buffer)?
+            self.run(&buffer)?;
         }
         Ok(())
     }

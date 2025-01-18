@@ -47,25 +47,25 @@ impl<'a> Iterator for Lexer<'a> {
     type Item = Result<Token<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let c = self.rem.chars().next()?;
-        let lexeme = &self.rem[..c.len_utf8()];
-        let pos = self.rel_pos;
-        let line = self.line;
-        self.rem = &self.rem[c.len_utf8()..];
-        self.rel_pos += c.len_utf8();
-        self.abs_pos += c.len_utf8();
-
-        let wrap = |token_type: TokenType| {
-            Some(Ok(Token {
-                token_type,
-                lexeme,
-                line,
-                offset: pos,
-            }))
-        };
-
         // Read until the full lexeme is consumed, then return it wrapped into token.
         loop {
+            let c = self.rem.chars().next()?;
+            let lexeme = &self.rem[..c.len_utf8()];
+            let pos = self.rel_pos;
+            let line = self.line;
+            self.rem = &self.rem[c.len_utf8()..];
+            self.rel_pos += c.len_utf8();
+            self.abs_pos += c.len_utf8();
+
+            let wrap = |token_type: TokenType| {
+                Some(Ok(Token {
+                    token_type,
+                    lexeme,
+                    line,
+                    offset: pos,
+                }))
+            };
+
             match c {
                 '(' => return wrap(TokenType::LeftParen),
                 ')' => return wrap(TokenType::RightParen),
