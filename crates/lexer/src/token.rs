@@ -40,29 +40,89 @@ impl fmt::Display for TokenType {
     }
 }
 
+/// Token location is a pair of indices representing row and column of the
+/// token in the source code.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TokenLocation(usize, usize);
+
+impl TokenLocation {
+    pub fn new(row: usize, col: usize) -> Self {
+        Self(row, col)
+    }
+
+    pub fn row(&self) -> usize {
+        self.0
+    }
+
+    pub fn col(&self) -> usize {
+        self.1
+    }
+}
+
+impl fmt::Display for TokenLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}:{})", self.0, self.1)
+    }
+}
+
+/// Token span is a pair of values: an offset from the beginning of the source
+/// code and the length of the token.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TokenSpan(usize, usize);
+
+impl TokenSpan {
+    pub fn new(offset: usize, len: usize) -> Self {
+        Self(offset, len)
+    }
+
+    pub fn from_single_char(offset: usize) -> Self {
+        Self(offset, 1)
+    }
+
+    pub fn offset(&self) -> usize {
+        self.0
+    }
+
+    pub fn len(&self) -> usize {
+        self.1
+    }
+}
+
+impl fmt::Display for TokenSpan {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}:{})", self.0, self.0 + self.1)
+    }
+}
+
 /// Token is a lexeme wrapped up with some extra information (useful for
 /// successive parsing).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token<'a> {
     pub token_type: TokenType,
     pub lexeme: &'a str,
-    pub line: usize,
-    pub offset: usize,
+    pub loc: TokenLocation,
+    pub span: TokenSpan,
 }
 
-impl<'a> Token<'a> {
-    pub fn new(token_type: TokenType, lexeme: &'a str, line: usize, offset: usize) -> Self {
-        Self {
-            token_type,
-            lexeme,
-            line,
-            offset,
+impl<'a> From<TokenType> for Token<'a> {
+    fn from(token_type: TokenType) -> Self {
+        match token_type {
+            _ => Self {
+                token_type,
+                lexeme: "",
+                loc: TokenLocation::default(),
+                span: TokenSpan::default(),
+            },
         }
     }
 }
 
 impl fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {} {}", self.token_type, self.lexeme, self.offset)
+        write!(
+            f,
+            "{{type: {}, lexeme: {}({}), at {}}}",
+            self.token_type, self.lexeme, self.span, self.loc
+        )
     }
 }

@@ -15,3 +15,6 @@ pretty_assertions = "1.4"
 lexer = { path = "crates/lexer" }
 thiserror = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
