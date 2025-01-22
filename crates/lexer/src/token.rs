@@ -26,6 +26,29 @@ pub enum TokenType {
     Less,
     LessEqual,
 
+    // Literals.
+    String,
+    Identifier,
+    Number,
+
+    // Keywords.
+    And,
+    Class,
+    Else,
+    False,
+    Fun,
+    For,
+    If,
+    Nil,
+    Or,
+    Print,
+    Return,
+    Super,
+    This,
+    True,
+    Var,
+    While,
+
     // Special tokens.
     Eof,
 }
@@ -75,6 +98,25 @@ impl fmt::Display for TokenType {
             Self::GreaterEqual => ">=",
             Self::Less => "<",
             Self::LessEqual => "<=",
+            Self::String => "string",
+            Self::Identifier => "identifier",
+            Self::Number => "number",
+            Self::And => "and",
+            Self::Class => "class",
+            Self::Else => "else",
+            Self::False => "false",
+            Self::Fun => "fun",
+            Self::For => "for",
+            Self::If => "if",
+            Self::Nil => "nil",
+            Self::Or => "or",
+            Self::Print => "print",
+            Self::Return => "return",
+            Self::Super => "super",
+            Self::This => "this",
+            Self::True => "true",
+            Self::Var => "var",
+            Self::While => "while",
             Self::Eof => "<EOF>",
         };
         write!(f, "{out}")

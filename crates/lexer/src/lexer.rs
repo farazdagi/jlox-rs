@@ -73,6 +73,7 @@ impl<'a> Iterator for Lexer<'a> {
             enum Pass {
                 Slash,
                 OpWithEq(TokenType, TokenType),
+                String,
             }
 
             let next_pass = match c {
@@ -84,13 +85,14 @@ impl<'a> Iterator for Lexer<'a> {
                 '=' => Pass::OpWithEq(TokenType::EqualEqual, TokenType::Equal),
                 '>' => Pass::OpWithEq(TokenType::GreaterEqual, TokenType::Greater),
                 '<' => Pass::OpWithEq(TokenType::LessEqual, TokenType::Less),
-                ' ' | '\t' => continue,
-                c if c.is_whitespace() => continue,
+                '"' => Pass::String,
                 '\n' | '\r' => {
                     self.row += 1;
                     self.col = 1;
                     continue;
                 }
+                ' ' | '\t' => continue,
+                c if c.is_whitespace() => continue,
                 c => {
                     return Some(Err(Error::UnexpectedChar {
                         c,
@@ -125,6 +127,26 @@ impl<'a> Iterator for Lexer<'a> {
                         return wrap(op, (start, self.pos));
                     }
                 }
+                Pass::String => {
+                    while let Some(c) = self.remaining().chars().next() {
+                        self.pos += c.len_utf8();
+                        self.col += 1;
+                        if c == '\n' {
+                            self.row += 1;
+                            self.col = 1;
+                        }
+                        if c == '"' {
+                            return wrap(
+                                TokenType::String,
+                                (start + c.len_utf8(), self.pos - c.len_utf8()),
+                            );
+                        }
+                    }
+                    return Some(Err(Error::UnterminatedString {
+                        src: self.src.to_string(),
+                        at: (start, (self.pos - start).max(1)).into(),
+                    }));
+                }
             };
         }
     }
@@ -132,15 +154,18 @@ impl<'a> Iterator for Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        pretty_assertions::{assert_eq, assert_ne},
-    };
+    use {super::*, pretty_assertions::assert_eq};
 
     fn assert_tokens(input: &str, expected: Vec<Token<'_>>) {
         let lexer = Lexer::new(input);
         let tokens: Vec<_> = lexer.tokens().map(Result::unwrap).collect();
         assert_eq!(tokens, expected);
+    }
+
+    fn assert_err(input: &str, expected: Error) {
+        let lexer = Lexer::new(input);
+        let tokens: Vec<_> = lexer.tokens().collect();
+        assert_eq!(tokens, vec![Err(expected), Ok(TokenType::Eof.into())]);
     }
 
     // See:
@@ -175,6 +200,46 @@ mod tests {
             wrap(TokenType::Dot, ".", 23),
             TokenType::Eof.into(),
         ]);
-        assert!(true);
+    }
+
+    // https://github.com/munificent/craftinginterpreters/blob/master/test/scanning/strings.lox
+    #[test]
+    fn strings() {
+        let wrap = |token_type: TokenType,
+                    lexeme: &'static str,
+                    loc: (usize, usize),
+                    span: (usize, usize)| {
+            let loc = TokenLocation::new(loc.0, loc.1);
+            let span = TokenSpan::new(span.0, span.1 - span.0);
+            Token {
+                token_type,
+                lexeme,
+                loc,
+                span,
+            }
+        };
+        let mut input = r#"
+""
+"string"
+"#;
+        assert_tokens(input, vec![
+            wrap(TokenType::String, "", (2, 1), (2, 2)),
+            wrap(TokenType::String, "string", (3, 1), (5, 11)),
+            TokenType::Eof.into(),
+        ]);
+
+        input = r#""unterminated string"#;
+        assert_err(input, Error::UnterminatedString {
+            src: input.to_string(),
+            at: (0, 20).into(),
+        });
+
+        input = r#"
+
+""#; // last char is unterminated string
+        assert_err(input, Error::UnterminatedString {
+            src: input.to_string(),
+            at: (2, 1).into(),
+        });
     }
 }
