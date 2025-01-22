@@ -76,21 +76,15 @@ impl<'a> Iterator for Lexer<'a> {
             }
 
             let next_pass = match c {
-                '(' => return wrap(TokenType::LeftParen, (start, self.pos)),
-                ')' => return wrap(TokenType::RightParen, (start, self.pos)),
-                '{' => return wrap(TokenType::LeftBrace, (start, self.pos)),
-                '}' => return wrap(TokenType::RightBrace, (start, self.pos)),
-                ',' => return wrap(TokenType::Comma, (start, self.pos)),
-                '.' => return wrap(TokenType::Dot, (start, self.pos)),
-                '-' => return wrap(TokenType::Minus, (start, self.pos)),
-                '+' => return wrap(TokenType::Plus, (start, self.pos)),
-                ';' => return wrap(TokenType::Semicolon, (start, self.pos)),
-                '*' => return wrap(TokenType::Star, (start, self.pos)),
+                '(' | ')' | '{' | '}' | ',' | '.' | '-' | '+' | ';' | '*' => {
+                    return wrap(c.into(), (start, self.pos))
+                }
                 '/' => Pass::Slash,
                 '!' => Pass::OpWithEq(TokenType::BangEqual, TokenType::Bang),
                 '=' => Pass::OpWithEq(TokenType::EqualEqual, TokenType::Equal),
                 '>' => Pass::OpWithEq(TokenType::GreaterEqual, TokenType::Greater),
                 '<' => Pass::OpWithEq(TokenType::LessEqual, TokenType::Less),
+                ' ' | '\t' => continue,
                 c if c.is_whitespace() => continue,
                 '\n' | '\r' => {
                     self.row += 1;

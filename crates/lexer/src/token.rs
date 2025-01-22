@@ -30,6 +30,29 @@ pub enum TokenType {
     Eof,
 }
 
+impl From<char> for TokenType {
+    fn from(c: char) -> Self {
+        match c {
+            '(' => Self::LeftParen,
+            ')' => Self::RightParen,
+            '{' => Self::LeftBrace,
+            '}' => Self::RightBrace,
+            ',' => Self::Comma,
+            '.' => Self::Dot,
+            '-' => Self::Minus,
+            '+' => Self::Plus,
+            ';' => Self::Semicolon,
+            '/' => Self::Slash,
+            '*' => Self::Star,
+            '!' => Self::Bang,
+            '=' => Self::Equal,
+            '>' => Self::Greater,
+            '<' => Self::Less,
+            _ => panic!("Invalid character: {}", c),
+        }
+    }
+}
+
 impl fmt::Display for TokenType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let out = match self {
