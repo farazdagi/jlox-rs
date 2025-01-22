@@ -16,6 +16,16 @@ pub enum TokenType {
     Slash,
     Star,
 
+    // One or two character tokens.
+    Bang,
+    BangEqual,
+    Equal,
+    EqualEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
+
     // Special tokens.
     Eof,
 }
@@ -34,6 +44,14 @@ impl fmt::Display for TokenType {
             Self::Semicolon => ";",
             Self::Slash => "/",
             Self::Star => "*",
+            Self::Bang => "!",
+            Self::BangEqual => "!=",
+            Self::Equal => "=",
+            Self::EqualEqual => "==",
+            Self::Greater => ">",
+            Self::GreaterEqual => ">=",
+            Self::Less => "<",
+            Self::LessEqual => "<=",
             Self::Eof => "<EOF>",
         };
         write!(f, "{out}")
