@@ -1,5 +1,5 @@
 use {
-    miette::{Diagnostic, LabeledSpan, SourceSpan},
+    miette::{Diagnostic, SourceSpan},
     thiserror::Error,
 };
 

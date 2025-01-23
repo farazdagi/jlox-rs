@@ -2,7 +2,7 @@ use core::fmt;
 
 /// Types of tokens that the lexer can produce.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TokenType {
+pub enum TokenKind {
     // Single-character tokens.
     LeftParen,
     RightParen,
@@ -53,7 +53,7 @@ pub enum TokenType {
     Eof,
 }
 
-impl From<char> for TokenType {
+impl From<char> for TokenKind {
     fn from(c: char) -> Self {
         match c {
             '(' => Self::LeftParen,
@@ -76,7 +76,7 @@ impl From<char> for TokenType {
     }
 }
 
-impl fmt::Display for TokenType {
+impl fmt::Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let out = match self {
             Self::LeftParen => "(",
@@ -123,51 +123,31 @@ impl fmt::Display for TokenType {
     }
 }
 
-/// Token location is a pair of indices representing row and column of the
-/// token in the source code.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct TokenLocation(usize, usize);
-
-impl TokenLocation {
-    pub fn new(row: usize, col: usize) -> Self {
-        Self(row, col)
-    }
-
-    pub fn row(&self) -> usize {
-        self.0
-    }
-
-    pub fn col(&self) -> usize {
-        self.1
-    }
-}
-
-impl fmt::Display for TokenLocation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({}:{})", self.0, self.1)
-    }
-}
-
-/// Token span is a pair of values: an offset from the beginning of the source
-/// code and the length of the token.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+/// Represents a span of bytes in the source code.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenSpan(usize, usize);
 
 impl TokenSpan {
-    pub fn new(offset: usize, len: usize) -> Self {
-        Self(offset, len)
+    pub fn new(start: usize, end: usize) -> Self {
+        assert!(end >= start);
+        Self(start, end)
     }
 
-    pub fn from_single_char(offset: usize) -> Self {
-        Self(offset, 1)
-    }
-
-    pub fn offset(&self) -> usize {
+    pub fn start(&self) -> usize {
         self.0
     }
 
-    pub fn len(&self) -> usize {
+    pub fn end(&self) -> usize {
         self.1
+    }
+
+    pub fn length(&self) -> usize {
+        assert!(self.1 >= self.0);
+        self.1 - self.0
+    }
+
+    pub fn range(&self) -> std::ops::Range<usize> {
+        self.0..self.1
     }
 }
 
@@ -181,21 +161,17 @@ impl fmt::Display for TokenSpan {
 /// successive parsing).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token<'a> {
-    pub token_type: TokenType,
+    pub kind: TokenKind,
     pub lexeme: &'a str,
-    pub loc: TokenLocation,
     pub span: TokenSpan,
 }
 
-impl<'a> From<TokenType> for Token<'a> {
-    fn from(token_type: TokenType) -> Self {
-        match token_type {
-            _ => Self {
-                token_type,
-                lexeme: "",
-                loc: TokenLocation::default(),
-                span: TokenSpan::default(),
-            },
+impl<'a> Token<'a> {
+    pub fn eof(offset: usize) -> Self {
+        Self {
+            kind: TokenKind::Eof,
+            lexeme: "<eof>",
+            span: TokenSpan::new(offset, offset),
         }
     }
 }
@@ -204,8 +180,8 @@ impl fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{{type: {}, lexeme: {}({}), at {}}}",
-            self.token_type, self.lexeme, self.span, self.loc
+            "{{type: {}, lexeme: {}({})}}",
+            self.kind, self.lexeme, self.span,
         )
     }
 }
