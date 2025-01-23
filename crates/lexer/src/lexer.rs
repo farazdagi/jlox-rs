@@ -1,7 +1,10 @@
-use crate::{
-    token::{Token, TokenKind, TokenSpan},
-    Error,
-    Result,
+use {
+    crate::{
+        token::{Token, TokenKind, TokenSpan},
+        Error,
+        Result,
+    },
+    std::ops::ControlFlow,
 };
 
 /// Streaming lexer that produces tokens from the input source.
@@ -29,12 +32,9 @@ impl<'a> Lexer<'a> {
     fn remaining(&self) -> &str {
         self.src.get(self.pos..).unwrap_or("")
     }
-}
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Result<Token<'a>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    /// Process the next token from the source code.
+    fn next_token(&mut self) -> Option<Result<Token<'a>>> {
         // Read until the full lexeme is consumed, then return it wrapped into token.
         loop {
             if self.pos >= self.src.len() {
@@ -45,138 +45,170 @@ impl<'a> Iterator for Lexer<'a> {
             let start = self.pos;
             self.pos += c.len_utf8();
 
-            let wrap = |token_type: TokenKind, (start, end): (usize, usize)| {
-                let span = TokenSpan::new(start, end);
-                Some(Ok(Token {
-                    kind: token_type,
-                    lexeme: &self.src[span.range()],
-                    span,
-                }))
-            };
-
-            let mut op_with_eq = |op_eq, op| {
-                if self.remaining().starts_with('=') {
-                    let c = self.remaining().chars().next()?;
-                    self.pos += c.len_utf8();
-                    wrap(op_eq, (start, self.pos))
-                } else {
-                    wrap(op, (start, self.pos))
-                }
-            };
-
-            let is_alphanumeric = |c: char| c.is_ascii_alphanumeric() || c == '_';
-
-            match c {
+            break Some(match c {
                 '(' | ')' | '{' | '}' | ',' | '.' | '-' | '+' | ';' | '*' => {
-                    return wrap(c.into(), (start, self.pos))
+                    self.wrap(c.into(), (start, self.pos))
                 }
-                '!' => return op_with_eq(TokenKind::BangEqual, TokenKind::Bang),
-                '=' => return op_with_eq(TokenKind::EqualEqual, TokenKind::Equal),
-                '>' => return op_with_eq(TokenKind::GreaterEqual, TokenKind::Greater),
-                '<' => return op_with_eq(TokenKind::LessEqual, TokenKind::Less),
-                '/' => {
-                    if self.remaining().starts_with('/') {
-                        // Skip the comment until the end of the line.
-                        self.pos = self
-                            .remaining()
-                            .find('\n')
-                            .map(|i| self.pos + i)
-                            .unwrap_or_else(|| self.src.len());
-                        continue;
-                    }
+                '!' => self.op_with_eq(TokenKind::BangEqual, TokenKind::Bang),
+                '=' => self.op_with_eq(TokenKind::EqualEqual, TokenKind::Equal),
+                '>' => self.op_with_eq(TokenKind::GreaterEqual, TokenKind::Greater),
+                '<' => self.op_with_eq(TokenKind::LessEqual, TokenKind::Less),
+                '/' => match self.slash() {
+                    ControlFlow::Continue(_) => continue,
+                    ControlFlow::Break(token) => token,
+                },
+                '"' => self.string_literal(),
+                c if c.is_ascii_digit() => self.number_literal(),
+                c if is_alphanumeric(c) => self.identifier(start),
+                '\n' | '\r' | ' ' | '\t' => continue,
+                c => Err(Error::UnexpectedChar {
+                    c,
+                    src: self.src.to_string(),
+                    at: (self.pos - c.len_utf8(), c.len_utf8()).into(),
+                }),
+            });
+        }
+    }
 
-                    // Allow multi-line comments, including nested ones.
-                    if self.remaining().starts_with('*') {
-                        let mut depth = 1;
-                        while let Some(c) = self.remaining().chars().next() {
-                            self.pos += c.len_utf8();
-                            match c {
-                                '/' if self.remaining().starts_with('*') => {
-                                    self.pos += 1;
-                                    depth += 1;
-                                }
-                                '*' if self.remaining().starts_with('/') => {
-                                    self.pos += 1;
-                                    depth -= 1;
-                                    if depth == 0 {
-                                        break;
-                                    }
-                                }
-                                _ => (),
-                            }
-                        }
-                        if depth != 0 {
-                            return Some(Err(Error::UnterminatedBlockComment {
-                                src: self.src.to_string(),
-                                at: (start, self.pos).into(),
-                            }));
-                        }
-                        continue;
-                    }
-                    return wrap(TokenKind::Slash, (start, self.pos));
-                }
-                '"' => {
-                    while let Some(c) = self.remaining().chars().next() {
-                        self.pos += c.len_utf8();
-                        if c == '"' {
-                            return wrap(TokenKind::String, (start, self.pos));
-                        }
-                    }
-                    return Some(Err(Error::UnterminatedString {
-                        src: self.src.to_string(),
-                        at: (start, (self.pos - start).max(1)).into(),
-                    }));
-                }
-                c if c.is_ascii_digit() => {
-                    let consume_digits = |lexer: &mut Lexer<'_>| {
-                        while let Some(c) = lexer.remaining().chars().next() {
-                            if c.is_digit(10) {
-                                lexer.pos += c.len_utf8();
-                            } else {
-                                break;
-                            }
-                        }
-                    };
+    /// Wrap the current lexeme into a token.
+    fn wrap(&self, kind: TokenKind, (start, end): (usize, usize)) -> Result<Token<'a>> {
+        let span = TokenSpan::new(start, end);
+        Ok(Token {
+            kind,
+            lexeme: &self.src[span.range()],
+            span,
+        })
+    }
 
-                    // Consume whole part of the number.
-                    consume_digits(self);
+    /// Process an operator that can be followed by an equal sign.
+    fn op_with_eq(&mut self, op_eq: TokenKind, op: TokenKind) -> Result<Token<'a>> {
+        if self.remaining().starts_with('=') {
+            self.pos += 1;
+            self.wrap(op_eq, (self.pos - 2, self.pos))
+        } else {
+            self.wrap(op, (self.pos - 1, self.pos))
+        }
+    }
 
-                    // If the next char is a dot and the char after that is digit, consider it as
-                    // decimal part, and move cursor to consume it as well.
-                    if self.remaining().starts_with('.') {
-                        let c = self.remaining().chars().nth(1).unwrap_or('\0');
-                        if c.is_digit(10) {
-                            self.pos += 1;
-                            consume_digits(self);
-                        }
+    /// Process a slash character, which can be a line/block comment or a
+    /// division operator.
+    fn slash(&mut self) -> ControlFlow<Result<Token<'a>>> {
+        let start = self.pos - 1;
+        if self.remaining().starts_with('/') {
+            // Skip the comment until the end of the line.
+            self.pos = self
+                .remaining()
+                .find('\n')
+                .map(|i| self.pos + i)
+                .unwrap_or_else(|| self.src.len());
+            return ControlFlow::Continue(());
+        }
+
+        // Allow multi-line comments, including nested ones.
+        if self.remaining().starts_with('*') {
+            let mut depth = 1;
+            while let Some(c) = self.remaining().chars().next() {
+                self.pos += c.len_utf8();
+                match c {
+                    '/' if self.remaining().starts_with('*') => {
+                        self.pos += 1;
+                        depth += 1;
                     }
-
-                    return wrap(TokenKind::Number, (start, self.pos));
-                }
-                c if is_alphanumeric(c) => {
-                    while let Some(c) = self.remaining().chars().next() {
-                        if is_alphanumeric(c) {
-                            self.pos += c.len_utf8();
-                        } else {
+                    '*' if self.remaining().starts_with('/') => {
+                        self.pos += 1;
+                        depth -= 1;
+                        if depth == 0 {
                             break;
                         }
                     }
-                    if let Some(keyword) = TokenKind::from_keyword(&self.src[start..self.pos]) {
-                        return wrap(keyword, (start, self.pos));
-                    }
-                    return wrap(TokenKind::Identifier, (start, self.pos));
+                    _ => (),
                 }
-                '\n' | '\r' | ' ' | '\t' => continue,
-                c => {
-                    return Some(Err(Error::UnexpectedChar {
-                        c,
-                        src: self.src.to_string(),
-                        at: (self.pos - c.len_utf8(), c.len_utf8()).into(),
-                    }))
-                }
+            }
+            return if depth != 0 {
+                ControlFlow::Break(Err(Error::UnterminatedBlockComment {
+                    src: self.src.to_string(),
+                    at: (start, self.pos - start).into(),
+                }))
+            } else {
+                // All content of the block comment is skipped.
+                ControlFlow::Continue(())
             };
         }
+
+        ControlFlow::Break(self.wrap(TokenKind::Slash, (start, self.pos)))
     }
+
+    /// Process a string literal.
+    fn string_literal(&mut self) -> Result<Token<'a>> {
+        let start = self.pos - 1;
+        while let Some(c) = self.remaining().chars().next() {
+            self.pos += c.len_utf8();
+            if c == '"' {
+                return self.wrap(TokenKind::String, (start, self.pos));
+            }
+        }
+        Err(Error::UnterminatedString {
+            src: self.src.to_string(),
+            at: (start, (self.pos - start).max(1)).into(),
+        })
+    }
+
+    /// Process a number literal.
+    fn number_literal(&mut self) -> Result<Token<'a>> {
+        let start = self.pos - 1;
+        let consume_digits = |lexer: &mut Lexer<'_>| {
+            while let Some(c) = lexer.remaining().chars().next() {
+                if c.is_digit(10) {
+                    lexer.pos += c.len_utf8();
+                } else {
+                    break;
+                }
+            }
+        };
+
+        // Consume whole part of the number.
+        consume_digits(self);
+
+        // If the next char is a dot and the char after that is digit, consider it as
+        // decimal part, and move cursor to consume it as well.
+        if self.remaining().starts_with('.') {
+            let c = self.remaining().chars().nth(1).unwrap_or('\0');
+            if c.is_digit(10) {
+                self.pos += 1;
+                consume_digits(self);
+            }
+        }
+
+        self.wrap(TokenKind::Number, (start, self.pos))
+    }
+
+    /// Process an identifier and reserved keywords.
+    fn identifier(&mut self, start: usize) -> Result<Token<'a>> {
+        while let Some(c) = self.remaining().chars().next() {
+            if is_alphanumeric(c) {
+                self.pos += c.len_utf8();
+            } else {
+                break;
+            }
+        }
+        if let Some(keyword) = TokenKind::from_keyword(&self.src[start..self.pos]) {
+            return self.wrap(keyword, (start, self.pos));
+        }
+
+        self.wrap(TokenKind::Identifier, (start, self.pos))
+    }
+}
+
+impl<'a> Iterator for Lexer<'a> {
+    type Item = Result<Token<'a>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_token()
+    }
+}
+
+fn is_alphanumeric(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
 }
 
 #[cfg(test)]
@@ -366,7 +398,7 @@ end"#;
         /* unterminated block comment"#;
         assert_err(input, Error::UnterminatedBlockComment {
             src: input.to_string(),
-            at: (9, 38).into(),
+            at: (9, 29).into(),
         });
     }
 }

@@ -16,6 +16,15 @@ pub enum Error {
         c: char,
     },
 
+    #[error("Source code ended unexpectedly")]
+    #[diagnostic(code(lexer::unexpected_eof))]
+    UnexpectedEof {
+        #[source_code]
+        src: String,
+        #[label("here")]
+        at: SourceSpan,
+    },
+
     #[error("Unterminated string")]
     #[diagnostic(code(lexer::unterminated_string))]
     UnterminatedString {
