@@ -1,7 +1,7 @@
 use core::fmt;
 
 /// Types of tokens that the lexer can produce.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
     // Single-character tokens.
     LeftParen,
@@ -51,6 +51,39 @@ pub enum TokenKind {
 
     // Special tokens.
     Eof,
+}
+
+/// Token kinds that are reserved keywords of the language.
+pub const KEYWORDS: &[(&str, TokenKind)] = &[
+    ("and", TokenKind::And),
+    ("class", TokenKind::Class),
+    ("else", TokenKind::Else),
+    ("false", TokenKind::False),
+    ("for", TokenKind::For),
+    ("fun", TokenKind::Fun),
+    ("if", TokenKind::If),
+    ("nil", TokenKind::Nil),
+    ("or", TokenKind::Or),
+    ("print", TokenKind::Print),
+    ("return", TokenKind::Return),
+    ("super", TokenKind::Super),
+    ("this", TokenKind::This),
+    ("true", TokenKind::True),
+    ("var", TokenKind::Var),
+    ("while", TokenKind::While),
+];
+
+impl TokenKind {
+    /// Returns the token kind for a given keyword if it is a reserved keyword.
+    pub fn from_keyword(lexeme: &str) -> Option<Self> {
+        KEYWORDS.iter().find_map(|(keyword, kind)| {
+            if lexeme == *keyword {
+                Some(*kind)
+            } else {
+                None
+            }
+        })
+    }
 }
 
 impl From<char> for TokenKind {

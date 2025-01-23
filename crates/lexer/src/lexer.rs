@@ -64,6 +64,8 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             };
 
+            let is_alphanumeric = |c: char| c.is_ascii_alphanumeric() || c == '_';
+
             match c {
                 '(' | ')' | '{' | '}' | ',' | '.' | '-' | '+' | ';' | '*' => {
                     return wrap(c.into(), (start, self.pos))
@@ -96,7 +98,7 @@ impl<'a> Iterator for Lexer<'a> {
                         at: (start, (self.pos - start).max(1)).into(),
                     }));
                 }
-                c if c.is_digit(10) => {
+                c if c.is_ascii_digit() => {
                     let consume_digits = |lexer: &mut Lexer<'_>| {
                         while let Some(c) = lexer.remaining().chars().next() {
                             if c.is_digit(10) {
@@ -121,6 +123,19 @@ impl<'a> Iterator for Lexer<'a> {
                     }
 
                     return wrap(TokenKind::Number, (start, self.pos));
+                }
+                c if is_alphanumeric(c) => {
+                    while let Some(c) = self.remaining().chars().next() {
+                        if is_alphanumeric(c) {
+                            self.pos += c.len_utf8();
+                        } else {
+                            break;
+                        }
+                    }
+                    if let Some(keyword) = TokenKind::from_keyword(&self.src[start..self.pos]) {
+                        return wrap(keyword, (start, self.pos));
+                    }
+                    return wrap(TokenKind::Identifier, (start, self.pos));
                 }
                 '\n' | '\r' | ' ' | '\t' => continue,
                 c => {
@@ -244,6 +259,52 @@ mod tests {
             wrap(TokenKind::Number, "123", (26, 29)),
             wrap(TokenKind::Dot, ".", (29, 30)),
             Token::eof(30),
+        ]);
+    }
+
+    // https://github.com/munificent/craftinginterpreters/blob/master/test/scanning/identifiers.lox
+    #[test]
+    fn identifiers() {
+        let input = r#"andy formless fo _ _123 _abc ab123
+abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_"#;
+        assert_tokens(input, vec![
+            wrap(TokenKind::Identifier, "andy", (0, 4)),
+            wrap(TokenKind::Identifier, "formless", (5, 13)),
+            wrap(TokenKind::Identifier, "fo", (14, 16)),
+            wrap(TokenKind::Identifier, "_", (17, 18)),
+            wrap(TokenKind::Identifier, "_123", (19, 23)),
+            wrap(TokenKind::Identifier, "_abc", (24, 28)),
+            wrap(TokenKind::Identifier, "ab123", (29, 34)),
+            wrap(
+                TokenKind::Identifier,
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_",
+                (35, 98),
+            ),
+            Token::eof(98),
+        ]);
+    }
+
+    // https://github.com/munificent/craftinginterpreters/blob/master/test/scanning/keywords.lox
+    #[test]
+    fn keywords() {
+        let input = r#"and class else false for fun if nil or return super this true var while"#;
+        assert_tokens(input, vec![
+            wrap(TokenKind::And, "and", (0, 3)),
+            wrap(TokenKind::Class, "class", (4, 9)),
+            wrap(TokenKind::Else, "else", (10, 14)),
+            wrap(TokenKind::False, "false", (15, 20)),
+            wrap(TokenKind::For, "for", (21, 24)),
+            wrap(TokenKind::Fun, "fun", (25, 28)),
+            wrap(TokenKind::If, "if", (29, 31)),
+            wrap(TokenKind::Nil, "nil", (32, 35)),
+            wrap(TokenKind::Or, "or", (36, 38)),
+            wrap(TokenKind::Return, "return", (39, 45)),
+            wrap(TokenKind::Super, "super", (46, 51)),
+            wrap(TokenKind::This, "this", (52, 56)),
+            wrap(TokenKind::True, "true", (57, 61)),
+            wrap(TokenKind::Var, "var", (62, 65)),
+            wrap(TokenKind::While, "while", (66, 71)),
+            Token::eof(71),
         ]);
     }
 }
