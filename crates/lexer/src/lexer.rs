@@ -307,4 +307,21 @@ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_"#;
             Token::eof(71),
         ]);
     }
+
+    #[test]
+    fn whitespace() {
+        let input = r#"space    tabs				newlines
+
+
+
+
+end"#;
+        assert_tokens(input, vec![
+            wrap(TokenKind::Identifier, "space", (0, 5)),
+            wrap(TokenKind::Identifier, "tabs", (9, 13)),
+            wrap(TokenKind::Identifier, "newlines", (17, 25)),
+            wrap(TokenKind::Identifier, "end", (30, 33)),
+            Token::eof(33),
+        ]);
+    }
 }
