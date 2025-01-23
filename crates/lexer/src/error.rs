@@ -24,6 +24,15 @@ pub enum Error {
         #[label("here")]
         at: SourceSpan,
     },
+
+    #[error("Unterminated block comment")]
+    #[diagnostic(code(lexer::unterminated_block_comment))]
+    UnterminatedBlockComment {
+        #[source_code]
+        src: String,
+        #[label("here")]
+        at: SourceSpan,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

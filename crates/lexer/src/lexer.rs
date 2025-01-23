@@ -84,6 +84,35 @@ impl<'a> Iterator for Lexer<'a> {
                             .unwrap_or_else(|| self.src.len());
                         continue;
                     }
+
+                    // Allow multi-line comments, including nested ones.
+                    if self.remaining().starts_with('*') {
+                        let mut depth = 1;
+                        while let Some(c) = self.remaining().chars().next() {
+                            self.pos += c.len_utf8();
+                            match c {
+                                '/' if self.remaining().starts_with('*') => {
+                                    self.pos += 1;
+                                    depth += 1;
+                                }
+                                '*' if self.remaining().starts_with('/') => {
+                                    self.pos += 1;
+                                    depth -= 1;
+                                    if depth == 0 {
+                                        break;
+                                    }
+                                }
+                                _ => (),
+                            }
+                        }
+                        if depth != 0 {
+                            return Some(Err(Error::UnterminatedBlockComment {
+                                src: self.src.to_string(),
+                                at: (start, self.pos).into(),
+                            }));
+                        }
+                        continue;
+                    }
                     return wrap(TokenKind::Slash, (start, self.pos));
                 }
                 '"' => {
@@ -323,5 +352,21 @@ end"#;
             wrap(TokenKind::Identifier, "end", (30, 33)),
             Token::eof(33),
         ]);
+    }
+
+    #[test]
+    fn block_comments() {
+        let input = r#"
+        // single line comment
+        /* block comment */
+        /* nested /* block1 */ /* block 2 /* block 2.1*/ */ comment*/ "#;
+        assert_tokens(input, vec![Token::eof(130)]);
+
+        let input = r#"
+        /* unterminated block comment"#;
+        assert_err(input, Error::UnterminatedBlockComment {
+            src: input.to_string(),
+            at: (9, 38).into(),
+        });
     }
 }
