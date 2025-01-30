@@ -157,7 +157,7 @@ impl fmt::Display for TokenKind {
 }
 
 /// Represents a span of bytes in the source code.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TokenSpan(usize, usize);
 
 impl TokenSpan {
@@ -192,7 +192,7 @@ impl fmt::Display for TokenSpan {
 
 /// Token is a lexeme wrapped up with some extra information (useful for
 /// successive parsing).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Token<'a> {
     pub kind: TokenKind,
     pub lexeme: &'a str,
